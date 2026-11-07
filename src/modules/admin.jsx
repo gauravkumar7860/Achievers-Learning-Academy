@@ -25,7 +25,7 @@ export function Dashboard() {
 
 const SIZE = 10
 export function Students() {
-  const [q, setQ] = useState(''); const [cls, setCls] = useState(''); const [page, setPage] = useState(0); const [show, setShow] = useState(false); const [bulk, setBulk] = useState(false)
+  const [q, setQ] = useState(''); const [cls, setCls] = useState(''); const [page, setPage] = useState(0); const [show, setShow] = useState(false); const [bulk, setBulk] = useState(false); const [edit, setEdit] = useState(null); const [eerr, setEerr] = useState('')
   const [classes] = useLoad(() => supabase.from('classes').select('*').order('sort_order'), [])
   const [sessions] = useLoad(() => supabase.from('academic_sessions').select('*'), [])
   const [rows, loading, reload, total] = useLoad(() => {
@@ -41,6 +41,15 @@ export function Students() {
     e.preventDefault(); setErr(''); setBusy(true)
     try { await api('/api/admin/students', { body: f }); setF(blank); setShow(false); reload() } catch (x) { setErr(x.message) }
     setBusy(false)
+  }
+  const startEdit = s => { setShow(false); setEerr(''); setEdit({ id: s.id, profile_id: s.profile_id, code: s.student_code, email: s.profiles.email, full_name: s.profiles.full_name, phone: s.profiles.phone || '', class_id: s.class_id || '', session_id: s.session_id || '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', address: s.address || '', admission_date: s.admission_date || '' }); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const setE = k => e => setEdit({ ...edit, [k]: e.target.value })
+  const saveEdit = async e => {
+    e.preventDefault(); setEerr('')
+    const p = await supabase.from('profiles').update({ full_name: edit.full_name, phone: edit.phone || null }).eq('id', edit.profile_id)
+    const st = await supabase.from('students').update({ class_id: edit.class_id || null, session_id: edit.session_id || null, guardian_name: edit.guardian_name || null, guardian_phone: edit.guardian_phone || null, address: edit.address || null, admission_date: edit.admission_date || null }).eq('id', edit.id)
+    if (p.error || st.error) return setEerr((p.error || st.error).message)
+    await audit('student.edit', { code: edit.code }); setEdit(null); reload()
   }
   const setStatus = async (s, status) => { await supabase.from('students').update({ status }).eq('id', s.id); await audit('student.status', { code: s.student_code, status }); reload() }
   const remove = s => confirmDo(`Permanently delete ${s.profiles.full_name}? This cannot be undone.`, async () => { try { await api(`/api/admin/students/${s.profile_id}`, { method: 'DELETE' }); reload() } catch (x) { alert(x.message) } })
@@ -59,12 +68,25 @@ export function Students() {
       <label>Admission date<input type="date" value={f.admission_date} onChange={set('admission_date')} /></label>
       <label>Address<input value={f.address} onChange={set('address')} /></label>
       {err && <p className="error full">{err}</p>}<button className="btn" disabled={busy}>{busy ? 'Creating…' : 'Create Student'}</button></form>}
+    {edit && <form className="form card" onSubmit={saveEdit}>
+      <h3 className="full">Edit student {edit.code}</h3>
+      <label>Full name<input required value={edit.full_name} onChange={setE('full_name')} /></label>
+      <label>Login email (cannot be changed here)<input disabled value={edit.email || ''} /></label>
+      <label>Student phone<input value={edit.phone} onChange={setE('phone')} /></label>
+      <label>Class<select required value={edit.class_id} onChange={setE('class_id')}><option value="">Select…</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label>Session<select value={edit.session_id} onChange={setE('session_id')}><option value="">Select…</option>{sessions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label>Parent/guardian<input value={edit.guardian_name} onChange={setE('guardian_name')} /></label>
+      <label>Guardian phone<input value={edit.guardian_phone} onChange={setE('guardian_phone')} /></label>
+      <label>Admission date<input type="date" value={edit.admission_date} onChange={setE('admission_date')} /></label>
+      <label>Address<input value={edit.address} onChange={setE('address')} /></label>
+      {eerr && <p className="error full">{eerr}</p>}
+      <span><button className="btn">Save changes</button> <button type="button" className="btn ghost" onClick={() => setEdit(null)}>Cancel</button></span></form>}
     <div className="filters"><input placeholder="Search by name…" value={q} onChange={e => { setQ(e.target.value); setPage(0) }} />
       <select value={cls} onChange={e => { setCls(e.target.value); setPage(0) }}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
     {loading ? <Loading /> : rows.length === 0 ? <Empty>No students found.</Empty> : <div className="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Class</th><th>Guardian</th><th>Admitted</th><th>Status</th><th></th></tr></thead><tbody>
       {rows.map(s => <tr key={s.id}><td>{s.student_code}</td><td>{s.profiles.full_name}<br /><small>{s.profiles.email}</small></td><td>{s.classes?.name || '—'}</td><td>{s.guardian_name || '—'}<br /><small>{s.guardian_phone}</small></td><td>{fmt(s.admission_date)}</td>
         <td><select value={s.status} onChange={e => setStatus(s, e.target.value)}><option value="active">Active</option><option value="inactive">Inactive</option><option value="on_leave">On leave</option></select></td>
-        <td className="actions"><button className="link" onClick={() => reset(s)}>Reset password</button><button className="link danger" onClick={() => remove(s)}>Delete</button></td></tr>)}</tbody></table></div>}
+        <td className="actions"><button className="link" onClick={() => startEdit(s)}>Edit</button><button className="link" onClick={() => reset(s)}>Reset password</button><button className="link danger" onClick={() => remove(s)}>Delete</button></td></tr>)}</tbody></table></div>}
     <Pager page={page} setPage={setPage} total={total} size={SIZE} /></Page>)
 }
 
