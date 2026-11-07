@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase, api, audit } from '../supabase.js'
 import { useLoad } from '../auth.jsx'
 import { Empty, Loading, Page, confirmDo, fmt, Pager } from './ui.jsx'
+import BulkImport from './bulk.jsx'
 
 export function Dashboard() {
   const [stats, loading] = useLoad(async () => {
@@ -24,7 +25,7 @@ export function Dashboard() {
 
 const SIZE = 10
 export function Students() {
-  const [q, setQ] = useState(''); const [cls, setCls] = useState(''); const [page, setPage] = useState(0); const [show, setShow] = useState(false)
+  const [q, setQ] = useState(''); const [cls, setCls] = useState(''); const [page, setPage] = useState(0); const [show, setShow] = useState(false); const [bulk, setBulk] = useState(false)
   const [classes] = useLoad(() => supabase.from('classes').select('*').order('sort_order'), [])
   const [sessions] = useLoad(() => supabase.from('academic_sessions').select('*'), [])
   const [rows, loading, reload, total] = useLoad(() => {
@@ -44,7 +45,8 @@ export function Students() {
   const setStatus = async (s, status) => { await supabase.from('students').update({ status }).eq('id', s.id); await audit('student.status', { code: s.student_code, status }); reload() }
   const remove = s => confirmDo(`Permanently delete ${s.profiles.full_name}? This cannot be undone.`, async () => { try { await api(`/api/admin/students/${s.profile_id}`, { method: 'DELETE' }); reload() } catch (x) { alert(x.message) } })
   const reset = async s => { const pw = prompt('New password (8+ characters):'); if (!pw) return; try { await api(`/api/admin/students/${s.profile_id}/password`, { body: { password: pw } }); alert('Password updated.') } catch (x) { alert(x.message) } }
-  return (<Page title="Students" action={<button className="btn" onClick={() => setShow(!show)}>{show ? 'Close' : '+ Add Student'}</button>}>
+  return (<Page title="Students" action={<span><button className="btn ghost" onClick={() => setBulk(!bulk)}>{bulk ? 'Close Import' : 'Bulk Import'}</button> <button className="btn" onClick={() => setShow(!show)}>{show ? 'Close' : '+ Add Student'}</button></span>}>
+    {bulk && <BulkImport onDone={reload} />}
     {show && <form className="form card" onSubmit={add}>
       <label>Full name<input required value={f.full_name} onChange={set('full_name')} /></label>
       <label>Login email<input type="email" required value={f.email} onChange={set('email')} /></label>
