@@ -6,8 +6,10 @@ import { useLoad } from '../auth.jsx'
 const ADDRESS = 'Village Birh Kathgarh, PO Kathgarh, Tehsil Balachaur, District SBS Nagar, Punjab'
 const links = [['/', 'Home'], ['/about', 'About'], ['/founder', 'Founder'], ['/courses', 'Courses'], ['/methodology', 'Methodology'], ['/achievements', 'Achievements'], ['/gallery', 'Gallery'], ['/admissions', 'Admissions'], ['/contact', 'Contact']]
 export const CLASSES = [
-  ['Kindergarten', 'Foundational learning.'], ['Classes 1–5', 'All subjects.'], ['Classes 6–8', 'All subjects.'], ['Classes 9–10', 'All subjects.'],
-  ['Class 12 – Arts Stream', 'English, History, Political Science, Economics.']]
+  ['LKG', 'Foundational learning.'], ['UKG', 'Foundational learning.'],
+  ...['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'].map(c => [c, 'All subjects.']),
+  ['11th', 'Details available on enquiry.'],
+  ['12th', 'Arts stream: English, History, Political Science, Economics.']]
 
 export function PublicLayout() {
   const [open, setOpen] = useState(false)
