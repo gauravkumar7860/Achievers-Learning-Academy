@@ -21,7 +21,7 @@ const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
 
 export default function BulkImport({ onDone }) {
   const [rows, setRows] = useState([]); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [results, setResults] = useState(null)
-  const template = () => download('students-template.csv', COLS.join(',') + '\nAarav Sharma,aarav@example.com,9876543210,Classes 6–8,Mr. Sharma,9876500000,Village Birh Kathgarh,2026-08-01,\n')
+  const template = () => download('students-template.csv', COLS.join(',') + '\nAarav Sharma,aarav@example.com,9876543210,6th,Mr. Sharma,9876500000,Village Birh Kathgarh,2026-08-01,\n')
   const onFile = async e => {
     setErr(''); setResults(null); setRows([])
     const f = e.target.files[0]; if (!f) return
