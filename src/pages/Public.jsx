@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import { useLoad } from '../auth.jsx'
+import { fmt } from '../modules/ui.jsx'
 
 const ADDRESS = 'Village Birh Kathgarh, PO Kathgarh, Tehsil Balachaur, District SBS Nagar, Punjab'
 const links = [['/', 'Home'], ['/about', 'About'], ['/founder', 'Founder'], ['/courses', 'Courses'], ['/methodology', 'Methodology'], ['/achievements', 'Achievements'], ['/gallery', 'Gallery'], ['/admissions', 'Admissions'], ['/contact', 'Contact']]
@@ -37,7 +38,7 @@ export function Home() {
     <Sec title="Classes Offered"><div className="grid">{CLASSES.map(([t, d]) => <div className="card" key={t}><h3>{t}</h3><p>{d}</p></div>)}</div></Sec>
     <Sec title="Why Choose Us?"><div className="grid">{['Concept-based learning', 'Regular assessments', 'Individual attention', 'Practice exercises', 'Continuous academic improvement'].map(t => <div className="card" key={t}><h3>{t}</h3></div>)}</div></Sec>
     <Sec title="Meet the Founder"><div className="card"><h3>Gaurav Kumar</h3><p>BCA Cybersecurity (Lamrin Tech Skills University Punjab) and BA (Lovely Professional University). <Link to="/founder">Read profile →</Link></p></div></Sec>
-    <Sec title="Latest Announcements">{ann.length === 0 ? <p className="muted">No announcements at the moment.</p> : ann.map(a => <div className="card" key={a.id}><small>{a.category} • {new Date(a.created_at).toLocaleDateString()}</small><h3>{a.title}</h3><p>{a.body}</p></div>)}</Sec>
+    <Sec title="Latest Announcements">{ann.length === 0 ? <p className="muted">No announcements at the moment.</p> : ann.map(a => <div className="card" key={a.id}><small>{a.category} • {fmt(a.created_at)}</small><h3>{a.title}</h3><p>{a.body}</p></div>)}</Sec>
   </>)
 }
 export const About = () => (<><Hero title="About Us" /><Sec><p>Achievers Learning Academy was established in 2024 with the objective of providing quality education, personalised attention and academic support.</p>

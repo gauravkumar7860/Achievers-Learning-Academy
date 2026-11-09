@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import { supabase } from '../supabase.js'
+import { fdt } from '../modules/ui.jsx'
 
 function Bell() {
   const { profile } = useAuth(); const nav = useNavigate()
@@ -20,7 +21,7 @@ function Bell() {
     <div className="bell"><button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Notifications">🔔{unread > 0 && <span className="badge">{unread}</span>}</button>
       {open && <div className="dropdown"><div className="dd-head"><b>Notifications</b><button className="link" onClick={readAll}>Mark all read</button></div>
         {items.length === 0 && <p className="muted pad">No notifications yet.</p>}
-        {items.slice(0, 8).map(n => <button key={n.id} className={'note ' + (n.is_read ? '' : 'unread')} onClick={() => go(n)}><b>{n.title}</b><small>{new Date(n.created_at).toLocaleString()}</small></button>)}
+        {items.slice(0, 8).map(n => <button key={n.id} className={'note ' + (n.is_read ? '' : 'unread')} onClick={() => go(n)}><b>{n.title}</b><small>{fdt(n.created_at)}</small></button>)}
         <button className="link pad" onClick={() => { setOpen(false); nav('/student/notifications') }}>View all</button></div>}
     </div>
     {toast && <button className="toast" onClick={() => go(toast)}><b>{toast.title}</b><small>Tap to open</small></button>}
