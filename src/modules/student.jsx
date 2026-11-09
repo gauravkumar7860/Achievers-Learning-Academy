@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabase.js'
 import { useAuth, useLoad } from '../auth.jsx'
-import { Empty, Loading, Page, fmt } from './ui.jsx'
+import { Empty, Loading, Page, fmt, fdt } from './ui.jsx'
 import { useNavigate } from 'react-router-dom'
 
 const useMe = () => useLoad(() => supabase.from('students').select('*, classes(name), academic_sessions(name)').maybeSingle().then(r => ({ data: r.data ? [r.data] : [] })), [])
@@ -33,7 +33,7 @@ export function Notifications() {
   const open = async n => { await supabase.from('notifications').update({ is_read: true }).eq('id', n.id); if (n.link) nav(n.link); else reload() }
   const all = async () => { await supabase.from('notifications').update({ is_read: true }).eq('is_read', false).eq('profile_id', profile.id); reload() }
   return (<Page title="Notification History" action={<button className="btn ghost" onClick={all}>Mark all as read</button>}>{loading ? <Loading /> : rows.length === 0 ? <Empty>No notifications.</Empty> :
-    rows.map(n => <button key={n.id} className={'card note-card ' + (n.is_read ? '' : 'unread')} onClick={() => open(n)}><b>{n.title}</b><span>{n.body}</span><small>{new Date(n.created_at).toLocaleString()}</small></button>)}</Page>)
+    rows.map(n => <button key={n.id} className={'card note-card ' + (n.is_read ? '' : 'unread')} onClick={() => open(n)}><b>{n.title}</b><span>{n.body}</span><small>{fdt(n.created_at)}</small></button>)}</Page>)
 }
 
 export function Profile() {

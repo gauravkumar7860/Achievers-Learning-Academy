@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase, api, audit } from '../supabase.js'
 import { useLoad } from '../auth.jsx'
-import { Empty, Loading, Page, confirmDo, fmt, Pager } from './ui.jsx'
+import { Empty, Loading, Page, confirmDo, fmt, fdt, Pager, DateInput } from './ui.jsx'
 import BulkImport from './bulk.jsx'
 
 export function Dashboard() {
@@ -29,7 +29,7 @@ export function Dashboard() {
   return (<Page title="Dashboard">{loading || !s ? <Loading /> : <div className="grid stats">
     {[['Total students', s.total], ['Active', s.active], ['Inactive', s.inactive], ['New admissions (30 days)', s.fresh], ['New enquiries', s.enquiries]].map(([t, v]) => <div className="card stat" key={t}><b>{v}</b><span>{t}</span></div>)}</div>}
     {f && <div className="grid stats"><div className="card stat"><b>{'₹' + f.collected.toLocaleString('en-IN')}</b><span>Fees collected this month</span></div><div className="card stat"><b>{'₹' + f.pending.toLocaleString('en-IN')}</b><span>Pending fees</span></div><div className="card stat"><b>{f.due7}</b><span>Fee due dates in next 7 days</span></div></div>}
-    <h3>Recent Activity</h3><div className="card">{logs.length === 0 ? <Empty>No activity yet.</Empty> : logs.map(l => <p key={l.id} className="row"><b>{l.action}</b><small>{new Date(l.created_at).toLocaleString()}</small></p>)}</div></Page>)
+    <h3>Recent Activity</h3><div className="card">{logs.length === 0 ? <Empty>No activity yet.</Empty> : logs.map(l => <p key={l.id} className="row"><b>{l.action}</b><small>{fdt(l.created_at)}</small></p>)}</div></Page>)
 }
 
 const SIZE = 10
@@ -74,7 +74,7 @@ export function Students() {
       <label>Session<select value={f.session_id} onChange={set('session_id')}><option value="">Select…</option>{sessions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label>Parent/guardian<input value={f.guardian_name} onChange={set('guardian_name')} /></label>
       <label>Guardian phone<input value={f.guardian_phone} onChange={set('guardian_phone')} /></label>
-      <label>Admission date<input type="date" value={f.admission_date} onChange={set('admission_date')} /></label>
+      <label>Admission date<DateInput value={f.admission_date} onChange={v => setF({ ...f, admission_date: v })} /></label>
       <label>Address<input value={f.address} onChange={set('address')} /></label>
       {err && <p className="error full">{err}</p>}<button className="btn" disabled={busy}>{busy ? 'Creating…' : 'Create Student'}</button></form>}
     {edit && <form className="form card" onSubmit={saveEdit}>
@@ -86,7 +86,7 @@ export function Students() {
       <label>Session<select value={edit.session_id} onChange={setE('session_id')}><option value="">Select…</option>{sessions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
       <label>Parent/guardian<input value={edit.guardian_name} onChange={setE('guardian_name')} /></label>
       <label>Guardian phone<input value={edit.guardian_phone} onChange={setE('guardian_phone')} /></label>
-      <label>Admission date<input type="date" value={edit.admission_date} onChange={setE('admission_date')} /></label>
+      <label>Admission date<DateInput value={edit.admission_date} onChange={v => setEdit({ ...edit, admission_date: v })} /></label>
       <label>Address<input value={edit.address} onChange={setE('address')} /></label>
       {eerr && <p className="error full">{eerr}</p>}
       <span><button className="btn">Save changes</button> <button type="button" className="btn ghost" onClick={() => setEdit(null)}>Cancel</button></span></form>}
@@ -172,5 +172,5 @@ export function Admissions() {
 
 export function Activity() {
   const [rows, loading] = useLoad(() => supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100), [])
-  return (<Page title="Activity Log">{loading ? <Loading /> : rows.length === 0 ? <Empty>No activity recorded.</Empty> : <div className="card">{rows.map(l => <p className="row" key={l.id}><span><b>{l.action}</b> <small>{l.details ? JSON.stringify(l.details) : ''}</small></span><small>{new Date(l.created_at).toLocaleString()}</small></p>)}</div>}</Page>)
+  return (<Page title="Activity Log">{loading ? <Loading /> : rows.length === 0 ? <Empty>No activity recorded.</Empty> : <div className="card">{rows.map(l => <p className="row" key={l.id}><span><b>{l.action}</b> <small>{l.details ? JSON.stringify(l.details) : ''}</small></span><small>{fdt(l.created_at)}</small></p>)}</div>}</Page>)
 }

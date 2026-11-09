@@ -7,7 +7,8 @@ export const daysBetween = (a, b) => Math.round((U(b) - U(a)) / 864e5)
 export const addDays = (s, n) => new Date(U(s) + n * 864e5).toISOString().slice(0, 10)
 export const dmy = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '')
 export const gapAmount = (days, fee) => Math.round((days * fee) / 31 * 100) / 100
-export const nextDue = start => { const d = daysBetween(start, today()); return d <= 0 ? start : addDays(start, Math.ceil(d / 31) * 31) }
+export const nextDue = start => { const d = daysBetween(start, today()); return d < 0 ? addDays(start, 30) : addDays(start, Math.floor(d / 31) * 31 + 30) }
+export const ord = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]) }
 export const RECEIPT_SELECT = '*, fee_invoices(kind,period_start,period_end), students(student_code, classes(name), profiles(full_name))'
 
 export function downloadCSV(name, headers, rows) {

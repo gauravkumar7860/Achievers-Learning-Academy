@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase.js'
 import { useLoad } from '../auth.jsx'
-import { Empty, Loading, Page, Pager } from './ui.jsx'
-import { money, today, daysBetween, addDays, dmy, gapAmount, nextDue, downloadCSV, receiptPDF, tablePDF, RECEIPT_SELECT, METHODS, METHOD_OPTIONS, parseCSV, toISO } from './feeutil.js'
+import { Empty, Loading, Page, Pager, DateInput } from './ui.jsx'
+import { money, today, daysBetween, addDays, dmy, gapAmount, nextDue, downloadCSV, receiptPDF, tablePDF, RECEIPT_SELECT, METHODS, METHOD_OPTIONS, parseCSV, toISO, ord } from './feeutil.js'
 
 const SIZE = 10
 const Chip = ({ i }) => { const s = Number(i.balance) > 0 && i.due_date < today() ? 'overdue' : i.status; return <span className={'chip ' + s}>{s}</span> }
@@ -12,7 +12,7 @@ const one = x => (Array.isArray(x) ? x[0] : x)
 
 /* ---------- shared: one student's invoices + payments (used by admin and student) ---------- */
 export function FeeHistory({ studentId }) {
-  const [inv, l1] = useLoad(() => supabase.from('fee_invoices').select('*').eq('student_id', studentId).order('due_date', { ascending: false }), [studentId])
+  const [inv, l1] = useLoad(() => supabase.from('fee_invoices').select('*').eq('student_id', studentId).lte('period_start', today()).order('period_start', { ascending: true }), [studentId])
   const [pay, l2] = useLoad(() => supabase.from('fee_payments').select(RECEIPT_SELECT).eq('student_id', studentId).order('created_at', { ascending: false }), [studentId])
   if (l1 || l2) return <Loading />
   const pending = inv.filter(i => Number(i.balance) > 0), nxt = [...pending].sort((a, b) => a.due_date.localeCompare(b.due_date))[0]
@@ -20,9 +20,10 @@ export function FeeHistory({ studentId }) {
     <div className="grid stats"><div className="card stat"><b>{money(sum(pending, i => i.balance))}</b><span>Pending fee</span></div>
       <div className="card stat"><b>{nxt ? dmy(nxt.due_date) : '—'}</b><span>Next due date</span></div>
       <div className="card stat"><b>{money(sum(pay, p => p.amount))}</b><span>Total paid</span></div></div>
-    <h3>Invoices</h3>
-    {inv.length === 0 ? <Empty>No invoices yet.</Empty> : <div className="table-wrap"><table><thead><tr><th>Billing period</th><th>Due</th><th>Fee</th><th>Adjust.</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead><tbody>
-      {inv.map(i => <tr key={i.id}><td>{periodLabel(i)}</td><td>{dmy(i.due_date)}</td><td>{money(i.amount)}</td><td>{money(i.adj_total)}</td><td>{money(i.paid_total)}</td><td><b>{money(i.balance)}</b></td><td><Chip i={i} /></td></tr>)}</tbody></table></div>}
+    <h3>Month-wise fees</h3>
+    {inv.length === 0 ? <Empty>No fee months yet.</Empty> : <div className="table-wrap"><table><thead><tr><th>Month</th><th>Period</th><th>Fee</th><th>Adjust.</th><th>Balance</th><th>Status</th></tr></thead><tbody>
+      {inv.map(i => { const d = pay.filter(p => p.invoice_id === i.id).map(p => p.paid_on).sort().pop(); return <tr key={i.id}><td>{i.kind === 'gap' ? 'Gap fee' : ord(i.period_no) + ' month'}</td><td>{dmy(i.period_start)} – {dmy(i.period_end)}</td><td>{money(i.amount)}</td><td>{money(i.adj_total)}</td><td><b>{money(i.balance)}</b></td>
+        <td>{Number(i.balance) <= 0 ? <span className="chip paid">PAID{d ? ` (${dmy(d)})` : ''}</span> : <><Chip i={i} /> <small>due {dmy(i.due_date)}</small></>}</td></tr> })}</tbody></table></div>}
     <h3>Payment history</h3>
     {pay.length === 0 ? <Empty>No payments recorded.</Empty> : <div className="table-wrap"><table><thead><tr><th>Date</th><th>Receipt</th><th>Period</th><th>Method</th><th>Amount</th><th></th></tr></thead><tbody>
       {pay.map(p => <tr key={p.id}><td>{dmy(p.paid_on)}</td><td>{p.receipt_no}</td><td>{p.fee_invoices && periodLabel(p.fee_invoices)}</td><td>{METHODS[p.method]}{p.reference && <><br /><small>{p.reference}</small></>}</td><td>{money(p.amount)}</td>
@@ -38,31 +39,44 @@ export function MyFees() {
   return (<Page title="My Fees">{loading ? <Loading /> : !me[0] ? <Empty>Your student record is not set up yet.</Empty> : !ready ? <Loading /> : <FeeHistory studentId={me[0].id} />}</Page>)
 }
 
-/* ---------- admin: invoices, collect payments, discounts ---------- */
+/* ---------- admin: fee register (like the paper register) ---------- */
+function MonthCell({ i, name, onPay, onAdj }) {
+  if (!i) return <td className="rc muted">—</td>
+  const paidOn = (i.fee_payments || []).map(p => p.paid_on).sort().pop(), bal = Number(i.balance), over = bal > 0 && i.due_date < today()
+  return (<td className={'rc ' + (bal <= 0 ? 'paid' : over ? 'overdue' : i.status)}><small>{dmy(i.period_start)} – {dmy(i.period_end)}</small>
+    {bal <= 0 ? <b>PAID{paidOn ? ` (${dmy(paidOn)})` : ''}</b> : <><b>{over ? 'OVERDUE' : i.status === 'partial' ? 'PARTIAL' : 'PENDING'} {money(bal)}</b><small>due {dmy(i.due_date)}</small>
+      <span><button className="link" onClick={() => onPay({ ...i, name })}>Collect</button><button className="link" onClick={() => onAdj({ ...i, name })}>Discount</button></span></>}</td>)
+}
+
 export function Fees() {
-  const [q, setQ] = useState(''); const [status, setStatus] = useState(''); const [page, setPage] = useState(0); const [tick, setTick] = useState(0)
+  const [q, setQ] = useState(''); const [cls, setCls] = useState(''); const [page, setPage] = useState(0); const [tick, setTick] = useState(0)
   const [syncMsg, setSyncMsg] = useState(''); const [pay, setPay] = useState(null); const [adj, setAdj] = useState(null); const [done, setDone] = useState(null)
   const [pf, setPf] = useState({}); const [af, setAf] = useState({ kind: 'discount', amount: '', reason: '' }); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
   const bump = () => setTick(t => t + 1)
-  const sync = async () => { const { data, error } = await supabase.rpc('generate_invoices', { p_student: null }); setSyncMsg(error ? error.message : data > 0 ? `${data} new invoice(s) generated.` : 'Invoices are up to date.'); bump() }
+  const sync = async () => { const { data, error } = await supabase.rpc('generate_invoices', { p_student: null }); setSyncMsg(error ? error.message : data > 0 ? `${data} new month(s) added.` : 'Everything is up to date.'); bump() }
   useEffect(() => { sync() }, []) // eslint-disable-line
+  const [classes] = useLoad(() => supabase.from('classes').select('*').order('sort_order'), [])
   const [stats] = useLoad(async () => {
     const t = today(), inv = (await supabase.from('fee_invoices').select('balance,due_date').gt('balance', 0)).data || []
     const pays = (await supabase.from('fee_payments').select('amount').gte('paid_on', t.slice(0, 8) + '01')).data || []
     return { data: [{ pending: sum(inv, r => r.balance), overdue: sum(inv.filter(r => r.due_date < t), r => r.balance), due7: inv.filter(r => r.due_date >= t && r.due_date <= addDays(t, 7)).length, month: sum(pays, r => r.amount) }] }
   }, [tick])
   const [rows, loading, , total] = useLoad(() => {
-    let x = supabase.from('fee_invoices').select('*, students!inner(student_code, classes(name), profiles!inner(full_name))', { count: 'exact' }).order('due_date', { ascending: false }).range(page * SIZE, page * SIZE + SIZE - 1)
-    if (q) x = x.ilike('students.profiles.full_name', `%${q}%`)
-    if (status === 'overdue') x = x.gt('balance', 0).lt('due_date', today()); else if (status) x = x.eq('status', status)
+    let x = supabase.from('students').select('id, student_code, status, admission_date, classes(name), profiles!inner(full_name), fee_accounts(*), fee_invoices(*, fee_payments(paid_on,amount))', { count: 'exact' })
+      .lte('fee_invoices.period_start', today()).order('created_at', { ascending: true }).range(page * SIZE, page * SIZE + SIZE - 1)
+    if (q) x = x.ilike('profiles.full_name', `%${q}%`)
+    if (cls) x = x.eq('class_id', cls)
     return x
-  }, [q, status, page, tick])
+  }, [q, cls, page, tick])
   const s = stats[0]
+  const list = rows.map(st => { const inv = [...(st.fee_invoices || [])].sort((a, b) => a.period_start.localeCompare(b.period_start)); return { st, acc: one(st.fee_accounts), cyc: inv.filter(i => i.kind === 'cycle'), gaps: inv.filter(i => i.kind === 'gap') } })
+  const cols = Math.max(1, ...list.map(r => r.cyc.length)), hasGap = list.some(r => r.gaps.length)
   const openPay = i => { setAdj(null); setDone(null); setErr(''); setPay(i); setPf({ amount: i.balance, method: 'cash', paid_on: today(), reference: '' }) }
   const openAdj = i => { setPay(null); setDone(null); setErr(''); setAdj(i); setAf({ kind: 'discount', amount: '', reason: '' }) }
   const submitPay = async e => {
     e.preventDefault(); setErr(''); const amt = Number(pf.amount)
     if (!(amt > 0) || amt > Number(pay.balance)) return setErr(`Enter an amount between 0.01 and ${money(pay.balance)}.`)
+    if (!pf.paid_on) return setErr('Enter the payment date as DD/MM/YYYY.')
     setBusy(true)
     const { data, error } = await supabase.from('fee_payments').insert({ invoice_id: pay.id, student_id: pay.student_id, amount: amt, method: pf.method, paid_on: pf.paid_on, reference: pf.reference || null }).select('id, receipt_no').single()
     setBusy(false); if (error) return setErr(error.message)
@@ -77,28 +91,33 @@ export function Fees() {
     setAdj(null); bump()
   }
   const getReceipt = async id => { const { data, error } = await supabase.from('fee_payments').select(RECEIPT_SELECT).eq('id', id).single(); error ? alert(error.message) : receiptPDF(data) }
-  return (<Page title="Fees" action={<button className="btn ghost" onClick={sync}>Generate invoices</button>}>
-    {syncMsg && <p className="muted small">{syncMsg} Invoices follow the fixed 31-day cycle and appear 5 days before the due date.</p>}
+  return (<Page title="Fee Register" action={<button className="btn ghost" onClick={sync}>Refresh months</button>}>
+    <p className="muted small">Today is {dmy(today())}. Each student's months run in fixed 31-day cycles from the date of joining; only months that have started are shown. {syncMsg}</p>
     {s && <div className="grid stats"><div className="card stat"><b>{money(s.pending)}</b><span>Pending fees</span></div><div className="card stat"><b>{money(s.overdue)}</b><span>Overdue</span></div>
-      <div className="card stat"><b>{s.due7}</b><span>Invoices due in 7 days</span></div><div className="card stat"><b>{money(s.month)}</b><span>Collected this month</span></div></div>}
+      <div className="card stat"><b>{s.due7}</b><span>Months due in 7 days</span></div><div className="card stat"><b>{money(s.month)}</b><span>Collected this month</span></div></div>}
     {done && <div className="card ok-card"><b>Payment recorded.</b> Receipt {done.receipt_no} <button className="btn sm" onClick={() => getReceipt(done.id)}>Download receipt PDF</button></div>}
-    {pay && <form className="form card" onSubmit={submitPay}><h3 className="full">Collect payment — {pay.students.profiles.full_name} ({periodLabel(pay)}), balance {money(pay.balance)}</h3>
+    {pay && <form className="form card" onSubmit={submitPay}><h3 className="full">Collect payment — {pay.name} ({periodLabel(pay)}), balance {money(pay.balance)}</h3>
       <label>Amount (₹)<input type="number" step="0.01" required value={pf.amount} onChange={e => setPf({ ...pf, amount: e.target.value })} /></label>
       <label>Method<select value={pf.method} onChange={e => setPf({ ...pf, method: e.target.value })}>{METHOD_OPTIONS.map(k => <option key={k} value={k}>{METHODS[k]}</option>)}</select></label>
-      <label>Payment date<input type="date" required value={pf.paid_on} onChange={e => setPf({ ...pf, paid_on: e.target.value })} /></label>
+      <label>Payment date<DateInput required value={pf.paid_on} onChange={v => setPf({ ...pf, paid_on: v })} /></label>
       <label>Transaction reference<input value={pf.reference} onChange={e => setPf({ ...pf, reference: e.target.value })} /></label>
       {err && <p className="error full">{err}</p>}<span><button className="btn" disabled={busy}>{busy ? 'Saving…' : 'Save payment'}</button> <button type="button" className="btn ghost" onClick={() => setPay(null)}>Cancel</button></span></form>}
-    {adj && <form className="form card" onSubmit={submitAdj}><h3 className="full">Discount / adjustment — {adj.students.profiles.full_name} ({periodLabel(adj)}), balance {money(adj.balance)}</h3>
+    {adj && <form className="form card" onSubmit={submitAdj}><h3 className="full">Discount / adjustment — {adj.name} ({periodLabel(adj)}), balance {money(adj.balance)}</h3>
       <label>Type<select value={af.kind} onChange={e => setAf({ ...af, kind: e.target.value })}><option value="discount">Discount (reduces fee)</option><option value="charge">Extra charge (adds to fee)</option></select></label>
       <label>Amount (₹)<input type="number" step="0.01" required value={af.amount} onChange={e => setAf({ ...af, amount: e.target.value })} /></label>
       <label className="full">Reason<input required value={af.reason} onChange={e => setAf({ ...af, reason: e.target.value })} /></label>
       {err && <p className="error full">{err}</p>}<span><button className="btn" disabled={busy}>Save adjustment</button> <button type="button" className="btn ghost" onClick={() => setAdj(null)}>Cancel</button></span></form>}
     <div className="filters"><input placeholder="Search student…" value={q} onChange={e => { setQ(e.target.value); setPage(0) }} />
-      <select value={status} onChange={e => { setStatus(e.target.value); setPage(0) }}><option value="">All invoices</option><option value="unpaid">Unpaid</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></div>
-    {loading ? <Loading /> : rows.length === 0 ? <Empty>No invoices found. Set up student fees under Fee Setup first.</Empty> : <div className="table-wrap"><table><thead><tr><th>Student</th><th>Billing period</th><th>Due</th><th>Fee</th><th>Paid</th><th>Balance</th><th>Status</th><th></th></tr></thead><tbody>
-      {rows.map(i => <tr key={i.id}><td>{i.students.profiles.full_name}<br /><small>{i.students.student_code} • {i.students.classes?.name}</small></td><td>{periodLabel(i)}</td><td>{dmy(i.due_date)}</td>
-        <td>{money(Number(i.amount) + Number(i.adj_total))}</td><td>{money(i.paid_total)}</td><td><b>{money(i.balance)}</b></td><td><Chip i={i} /></td>
-        <td className="actions">{Number(i.balance) > 0 && <><button className="link" onClick={() => openPay(i)}>Collect</button><button className="link" onClick={() => openAdj(i)}>Discount</button></>}</td></tr>)}</tbody></table></div>}
+      <select value={cls} onChange={e => { setCls(e.target.value); setPage(0) }}><option value="">All classes</option>{classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+    {loading ? <Loading /> : list.length === 0 ? <Empty>No students found.</Empty> : <div className="table-wrap register"><table><thead><tr><th>Sr</th><th>Name</th><th>DOJ</th>
+      {Array.from({ length: cols }, (_, k) => <th key={k}>{ord(k + 1)} MONTH</th>)}{hasGap && <th>GAP FEE</th>}<th>Pending</th></tr></thead><tbody>
+      {list.map(({ st, acc, cyc, gaps }, n) => { const name = st.profiles.full_name, all = [...cyc, ...gaps]
+        return <tr key={st.id}><td>{page * SIZE + n + 1}</td><td><b>{name}</b>{st.status === 'inactive' && <span className="chip overdue">left</span>}<br /><small>{st.student_code} • {st.classes?.name || '—'}</small></td>
+          <td>{dmy(acc?.billing_start_date || st.admission_date)}</td>
+          {!acc ? <td colSpan={cols + (hasGap ? 1 : 0)} className="muted">Fee not set — use Fee Setup</td> : <>
+            {Array.from({ length: cols }, (_, k) => <MonthCell key={k} i={cyc.find(c => c.period_no === k + 1)} name={name} onPay={openPay} onAdj={openAdj} />)}
+            {hasGap && <td className="rc">{gaps.map(g => <MonthCell key={g.id} i={g} name={name} onPay={openPay} onAdj={openAdj} />)}{gaps.length === 0 && '—'}</td>}</>}
+          <td><b>{money(sum(all, i => i.balance))}</b></td></tr> })}</tbody></table></div>}
     <Pager page={page} setPage={setPage} total={total} size={SIZE} /></Page>)
 }
 
@@ -178,7 +197,7 @@ export function FeeSetup() {
   return (<Page title="Fee Setup" action={<button className="btn ghost" onClick={() => setImp(!imp)}>{imp ? 'Close Import' : 'Import fee history'}</button>}>{imp && <FeeImport onDone={reload} />}<p className="muted small">Set each student's monthly fee and billing start date. Billing runs on fixed 31-day cycles that are never reset. A new fee applies to future invoices only.</p>
     {edit && <form className="form card" onSubmit={save}><h3 className="full">{edit.s.profiles.full_name} ({edit.s.student_code})</h3>
       <label>Monthly fee (₹ per 31 days)<input type="number" step="0.01" required value={edit.monthly_fee} onChange={e => setEdit({ ...edit, monthly_fee: e.target.value })} /></label>
-      <label>Billing start date{edit.exists && ' (locked)'}<input type="date" required disabled={edit.exists} value={edit.billing_start_date} onChange={e => setEdit({ ...edit, billing_start_date: e.target.value })} /></label>
+      <label>Billing start date{edit.exists && ' (locked)'}<DateInput required disabled={edit.exists} value={edit.billing_start_date} onChange={v => setEdit({ ...edit, billing_start_date: v })} /></label>
       <label>Billing<select value={edit.active ? '1' : '0'} onChange={e => setEdit({ ...edit, active: e.target.value === '1' })}><option value="1">Active</option><option value="0">Paused</option></select></label>
       {err && <p className="error full">{err}</p>}<span><button className="btn">Save fee setup</button> <button type="button" className="btn ghost" onClick={() => setEdit(null)}>Cancel</button></span></form>}
     <div className="filters"><input placeholder="Search student…" value={q} onChange={e => { setQ(e.target.value); setPage(0) }} /></div>
@@ -214,10 +233,10 @@ export function Leave() {
   return (<Page title="Leave & Rejoining">
     <form className="form card" onSubmit={startLeave}><h3 className="full">Mark a student on leave</h3>
       <label>Student<select required value={sf.student} onChange={e => setSf({ ...sf, student: e.target.value })}><option value="">Select…</option>{students.map(s => <option key={s.id} value={s.id}>{s.profiles.full_name} ({s.student_code})</option>)}</select></label>
-      <label>Leave start date<input type="date" required value={sf.start} onChange={e => setSf({ ...sf, start: e.target.value })} /></label>
+      <label>Leave start date<DateInput required value={sf.start} onChange={v => setSf({ ...sf, start: v })} /></label>
       {!rj && err && <p className="error full">{err}</p>}<button className="btn">Record leave</button></form>
     {rj && <form className="form card" onSubmit={saveRejoin}><h3 className="full">Record rejoining — {rj.r.students.profiles.full_name}</h3>
-      <label>Rejoining date<input type="date" required value={rj.date} onChange={e => setRj({ ...rj, date: e.target.value })} /></label>
+      <label>Rejoining date<DateInput required value={rj.date} onChange={v => setRj({ ...rj, date: v })} /></label>
       <label>Gap fee policy<select value={rj.policy} onChange={e => setRj({ ...rj, policy: e.target.value })}><option value="charge">Charge the fee for the gap</option><option value="waive">Waive the gap fee</option><option value="custom">Custom fee adjustment</option></select></label>
       {rj.policy === 'custom' && <label>Custom amount (₹)<input type="number" step="0.01" value={rj.custom} onChange={e => setRj({ ...rj, custom: e.target.value })} /></label>}
       <label className="full">Note (optional)<input value={rj.note} onChange={e => setRj({ ...rj, note: e.target.value })} /></label>
@@ -247,7 +266,7 @@ export function FeeReports() {
   const byMethod = METHOD_OPTIONS.map(m => [METHODS[m], sum(pays.filter(p => p.method === m), p => p.amount)])
   const byMonth = Object.entries(pays.reduce((o, p) => { const k = p.paid_on.slice(0, 7); o[k] = (o[k] || 0) + Number(p.amount); return o }, {}))
   return (<Page title="Fee Reports">
-    <div className="filters"><label>From<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>To<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label></div>
+    <div className="filters"><label>From<DateInput value={from} onChange={setFrom} /></label><label>To<DateInput value={to} onChange={setTo} /></label></div>
     <h3>Fee collection</h3>
     {l1 ? <Loading /> : <><div className="grid stats"><div className="card stat"><b>{money(sum(pays, p => p.amount))}</b><span>Collected ({pays.length} payments)</span></div>
       {byMethod.map(([m, v]) => <div className="card stat" key={m}><b>{money(v)}</b><span>{m}</span></div>)}</div>
