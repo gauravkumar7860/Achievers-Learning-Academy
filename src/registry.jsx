@@ -6,7 +6,7 @@ import * as F from './modules/fees.jsx'
 export const adminModules = [
   { path: '', label: 'Dashboard', icon: '▦', element: <A.Dashboard /> },
   { path: 'students', label: 'Students', icon: '☺', element: <A.Students /> },
-  { path: 'fees', label: 'Fees', icon: '₹', element: <F.Fees /> },
+  { path: 'fees', label: 'Fee Register', icon: '₹', element: <F.Fees /> },
   { path: 'payments', label: 'Payments', icon: '▣', element: <F.Payments /> },
   { path: 'fee-setup', label: 'Fee Setup', icon: '⚙', element: <F.FeeSetup /> },
   { path: 'leave', label: 'Leave & Rejoining', icon: '↺', element: <F.Leave /> },
