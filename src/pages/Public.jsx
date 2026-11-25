@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Blocks, Shapes, BookOpen, Pencil, Trophy, Atom, FlaskConical, Globe, Ruler, Calculator, BookText, GraduationCap, BarChart3, Landmark,
-  Lightbulb, ClipboardCheck, Users, BookOpenText, TrendingUp, Megaphone, Send, User, MapPin, Link2, ArrowRight, Menu, X } from 'lucide-react'
+  Lightbulb, ClipboardCheck, Users, BookOpenText, TrendingUp, Megaphone, Send, User, MapPin, Link2, ArrowRight, ArrowUp, Menu, X } from 'lucide-react'
 import { supabase } from '../supabase.js'
 import { useLoad } from '../auth.jsx'
 import { fmt } from '../modules/ui.jsx'
@@ -19,16 +19,57 @@ function Photo({ src, alt, fallback }) {
   return bad ? fallback : <img src={src} alt={alt} onError={() => setBad(true)} />
 }
 
+// ---- motion: scroll progress, sticky shrinking header, back-to-top, and reveal-on-scroll ----
+const REVEAL = '.pub main .cl-card,.pub main .why-item,.pub main .card,.pub main .founder,.pub main .annc,.pub main .sec-title,.pub main .page-hero h1,.pub .ft-col,.pub .ft-brand'
+function ScrollFx() {
+  const [st, setSt] = useState({ p: 0, top: false })
+  useEffect(() => {
+    let raf = 0, last = ''
+    const run = () => {
+      raf = 0; const y = window.scrollY, h = document.documentElement.scrollHeight - window.innerHeight
+      document.documentElement.style.setProperty('--sy', Math.min(y, 800))
+      document.querySelector('.site-head')?.classList.toggle('scrolled', y > 24)
+      const next = { p: h > 0 ? Math.round(y / h * 1000) / 10 : 0, top: y > 500 }, key = next.p + '|' + next.top
+      if (key !== last) { last = key; setSt(next) }
+    }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(run) }
+    run(); window.addEventListener('scroll', onScroll, { passive: true }); window.addEventListener('resize', onScroll)
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); if (raf) cancelAnimationFrame(raf) }
+  }, [])
+  return (<><div className="progress" style={{ width: st.p + '%' }} />
+    <button className={'to-top' + (st.top ? ' show' : '')} aria-label="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={22} /></button></>)
+}
+function RevealFx() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    if (!('IntersectionObserver' in window)) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }), { threshold: 0.12, rootMargin: '0px 0px -6% 0px' })
+    const scan = () => document.querySelectorAll(REVEAL).forEach(el => {
+      if (el.dataset.rv) return
+      el.dataset.rv = '1'; el.classList.add('rv')
+      el.style.setProperty('--d', Math.min(Array.prototype.indexOf.call(el.parentElement.children, el), 8) * 70 + 'ms')
+      reduce ? el.classList.add('in') : io.observe(el)
+    })
+    scan()
+    const mo = new MutationObserver(scan), main = document.querySelector('.pub main')
+    if (main) mo.observe(main, { childList: true, subtree: true })
+    return () => { io.disconnect(); mo.disconnect() }
+  }, [pathname])
+  return null
+}
+
 export function PublicLayout() {
-  const [open, setOpen] = useState(false)
-  return (<div className="pub">
+  const [open, setOpen] = useState(false); const { pathname } = useLocation()
+  return (<div className="pub"><ScrollFx /><RevealFx />
     <header className="site-head"><div className="site-bar">
       <Link to="/" className="site-brand"><img src="/logo.png" alt="Achievers Learning Academy" /><span className="vr" /><span className="site-name"><b>Achievers Learning Academy</b><small>Learn • Grow • Achieve</small></span></Link>
       <nav className={open ? 'open' : ''} onClick={() => setOpen(false)}>{links.map(([to, t]) => <NavLink key={to} to={to} end>{t}</NavLink>)}
         <Link className="site-cta mob" to="/login"><GraduationCap size={18} /> Student Login</Link></nav>
       <Link className="site-cta desk" to="/login"><GraduationCap size={18} /> Student Login <ArrowRight size={16} /></Link>
       <button className="burger" aria-label="Menu" onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button></div></header>
-    <main><Outlet /></main>
+    <main key={pathname} className="page-in"><Outlet /></main>
     <footer className="site-foot"><div className="ft-brand"><img src="/logo.png" alt="" /><span className="vr" /><div><b>Achievers Learning Academy</b><small>Learn • Grow • Achieve</small></div></div>
       <div className="ft-col"><MapPin size={20} /><div><b>Address</b><p>{ADDRESS}</p></div></div>
       <div className="ft-col"><Link2 size={20} /><div><b>Links</b><p><Link to="/admissions">Admissions</Link> | <Link to="/login">Student Login</Link> | <Link to="/admin-login">Admin Login</Link></p></div></div></footer>
@@ -48,6 +89,7 @@ export function Home() {
   const why = [[Lightbulb, 'Concept-based learning', 'b'], [ClipboardCheck, 'Regular assessments', 'g'], [Users, 'Individual attention', 'p'], [BookOpenText, 'Practice exercises', 'g'], [TrendingUp, 'Continuous academic improvement', 'b']]
   return (<>
     <section className="hero2"><div className="hero2-in">
+      <span className="float f1"><GraduationCap size={96} strokeWidth={1.1} /></span><span className="float f2"><BookOpen size={84} strokeWidth={1.1} /></span><span className="float f3"><Atom size={60} strokeWidth={1.1} /></span>
       <div className="hero2-text"><h1>Learn <i>•</i> Grow <i>•</i> <span>Achieve</span></h1>
         <p>Achievers Learning Academy, established in 2024, provides quality education, personalised attention and academic support.</p>
         <div className="hero2-btns"><Link to="/admissions" className="btn-g"><Send size={18} /> Admission Enquiry <ArrowRight size={16} /></Link><Link to="/login" className="btn-o"><User size={18} /> Student Login</Link></div></div>
