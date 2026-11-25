@@ -173,3 +173,17 @@ td select{min-width:100px;padding:6px}.actions{white-space:nowrap}.pager{display
   .site-bar nav.open{display:flex}.site-bar nav a{padding:10px 14px;font-size:.92rem}
   .site-cta.mob{display:inline-flex;justify-content:center;margin-top:8px}
 }
+
+/* ===== login pages: background + welcome panel ===== */
+.auth-bg{margin-top:-62px;padding:132px 4vw 70px;min-height:calc(100vh - 110px);position:relative;overflow:hidden;
+  background:linear-gradient(115deg,rgba(5,32,79,.93),rgba(10,58,140,.86) 60%,rgba(13,77,176,.8)),url('/login-bg.jpg') center/cover no-repeat,linear-gradient(115deg,#05204f,#0a3a8c 62%,#0d4db0);border-bottom-left-radius:110px}
+.auth-bg::before{content:'';position:absolute;left:18px;top:110px;width:130px;height:180px;background-image:radial-gradient(#5a86d6 1.6px,transparent 1.8px);background-size:16px 16px;opacity:.5}
+.auth-bg::after{content:'';position:absolute;right:-140px;bottom:-160px;width:520px;height:520px;border-radius:50%;border:48px solid rgba(139,209,63,.16)}
+.auth-split{position:relative;z-index:1;max-width:1080px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.auth-side{color:#fff}.auth-side h1{color:#fff;font-size:clamp(2.2rem,4.6vw,3.6rem);line-height:1.1;margin:0 0 14px;font-weight:700}.auth-side h1 span{color:var(--lime,#8bd13f)}
+.auth-side p{font-size:1.08rem;opacity:.93;max-width:440px;margin:0 0 24px;line-height:1.6}
+.auth-side ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}.auth-side li{display:flex;align-items:center;gap:12px;font-weight:500}
+.auth-side li span{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;color:#c6ee93}
+.auth-bg .auth-card{margin:0;width:100%;max-width:430px;justify-self:end;padding:34px 32px;border-radius:22px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.auth-bg .auth-card .auth-logo{width:96px}
+@media(max-width:900px){.auth-bg{padding:112px 5vw 50px;border-bottom-left-radius:60px}.auth-split{grid-template-columns:1fr;gap:26px}.auth-side{text-align:center}.auth-side p{margin:0 auto 18px}.auth-side ul{display:none}.auth-bg .auth-card{justify-self:center}}
