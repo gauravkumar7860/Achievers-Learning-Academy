@@ -45,17 +45,20 @@ function RevealFx() {
     window.scrollTo(0, 0)
     if (!('IntersectionObserver' in window)) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }), { threshold: 0.12, rootMargin: '0px 0px -6% 0px' })
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }), { threshold: 0.05, rootMargin: '0px 0px -4% 0px' })
+    const seen = new WeakSet()   // per page visit, so the footer is watched again after every page change
     const scan = () => document.querySelectorAll(REVEAL).forEach(el => {
-      if (el.dataset.rv) return
-      el.dataset.rv = '1'; el.classList.add('rv')
-      el.style.setProperty('--d', Math.min(Array.prototype.indexOf.call(el.parentElement.children, el), 8) * 70 + 'ms')
+      if (seen.has(el)) return
+      seen.add(el)
+      if (el.classList.contains('in')) return
+      if (!el.classList.contains('rv')) { el.classList.add('rv'); el.style.setProperty('--d', Math.min(Array.prototype.indexOf.call(el.parentElement.children, el), 8) * 70 + 'ms') }
       reduce ? el.classList.add('in') : io.observe(el)
     })
-    scan()
+    const atBottom = () => { if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 40) document.querySelectorAll('.rv:not(.in)').forEach(e => e.classList.add('in')) }
+    scan(); window.addEventListener('scroll', atBottom, { passive: true })
     const mo = new MutationObserver(scan), main = document.querySelector('.pub main')
     if (main) mo.observe(main, { childList: true, subtree: true })
-    return () => { io.disconnect(); mo.disconnect() }
+    return () => { io.disconnect(); mo.disconnect(); window.removeEventListener('scroll', atBottom) }
   }, [pathname])
   return null
 }
